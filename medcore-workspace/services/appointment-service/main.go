@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log"
 	"time"
@@ -12,7 +13,17 @@ import (
 )
 
 func main() {
-	// %2F = garis miring "/" pada nama vhost "/medcore_vhost"
+	// Opsi dari command line:
+	//   -qty=-5   -> kirim jumlah obat tertentu (untuk uji poison message)
+	//   -id=evt-x -> pakai Event ID tertentu (untuk uji idempoten nanti)
+	qty := flag.Int("qty", 15, "jumlah obat")
+	eventID := flag.String("id", "", "event ID (kosong = otomatis)")
+	flag.Parse()
+
+	if *eventID == "" {
+		*eventID = fmt.Sprintf("evt-%s", uuid.New().String())
+	}
+
 	amqpURI := "amqp://admin_medcore:SecuredPassRabbit2026!@localhost:5672/%2Fmedcore_vhost"
 
 	log.Println("[Appointment Service] Menginisialisasi koneksi messaging...")
@@ -22,9 +33,8 @@ func main() {
 	}
 	defer pub.Close()
 
-	// Simulasi event ketika konsultasi selesai
 	simulatedEvent := publisher.ConsultationCompletedEvent{
-		EventID:    fmt.Sprintf("evt-%s", uuid.New().String()),
+		EventID:    *eventID,
 		EventName:  "ConsultationCompletedEvent",
 		OccurredAt: time.Now().UTC().Format(time.RFC3339),
 		Producer:   "appointment-service",
@@ -36,7 +46,7 @@ func main() {
 			Prescription: publisher.PrescriptionData{
 				PrescriptionID: "RX-2026-9901",
 				Items: []publisher.PrescriptionItem{
-					{DrugCode: "MED-AMX-500", Quantity: 15, Dosage: "3x1 sehari sesudah makan"},
+					{DrugCode: "MED-AMX-500", Quantity: *qty, Dosage: "3x1 sehari sesudah makan"},
 				},
 			},
 			BillingSummary: publisher.BillingData{
@@ -49,7 +59,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	log.Println("[Appointment Service] Menerbitkan event konsultasi ke RabbitMQ...")
+	log.Printf("[Appointment Service] Menerbitkan event %s (qty=%d)...", *eventID, *qty)
 	if err := pub.PublishConsultationCompleted(ctx, simulatedEvent); err != nil {
 		log.Fatalf("Gagal mempublikasikan event: %v", err)
 	}
