@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"log"
 	"time"
 
@@ -12,6 +13,10 @@ import (
 )
 
 func main() {
+	// -stock=0 -> simulasi stok MED-AMX-500 kosong
+	initialStock := flag.Int("stock", 100, "stok awal MED-AMX-500")
+	flag.Parse()
+
 	amqpURI := "amqp://admin_medcore:SecuredPassRabbit2026!@localhost:5672/%2Fmedcore_vhost"
 	mongoURI := "mongodb://localhost:27017"
 
@@ -28,6 +33,8 @@ func main() {
 		log.Fatalf("[Pharmacy Service] MongoDB tidak merespons: %v", err)
 	}
 	log.Println("[Pharmacy Service] Terhubung ke MongoDB.")
+
+	consumer.SetInitialStock("MED-AMX-500", *initialStock)
 
 	log.Println("[Pharmacy Service] Memulai consumer resep...")
 	consumer.StartPrescriptionConsumer(amqpURI, mongoClient)
